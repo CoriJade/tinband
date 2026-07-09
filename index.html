@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Thomas Ian Nicholas — Tour Dates</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Avenir is not a free web font. Avenir Next/Avenir load on Apple + licensed devices;
+     Nunito Sans 300 is the closest free stand-in for everyone else. -->
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:opsz,wght@6..12,300;6..12,400;6..12,600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0a0a0a;        /* near-black text / pins */
+    --paper:#ffffff;      /* background */
+    --mid:#8a8a8a;        /* secondary text */
+    --hair:#e6e6e6;       /* hairline dividers/borders */
+    --faint:#f4f4f4;      /* hover fill */
+    --font:'Avenir Next','Avenir','Nunito Sans',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--font);font-weight:300;-webkit-font-smoothing:antialiased;}
+  #app{width:100%;}
+
+  /* ── Top bar ── */
+  #bar{
+    padding:16px 18px 14px;
+    border-bottom:1px solid var(--hair);
+    background:var(--paper);
+  }
+  .eyebrow{
+    font-size:10px;letter-spacing:.28em;text-transform:uppercase;
+    color:var(--mid);font-weight:600;margin-bottom:11px;
+  }
+  #row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+
+  .toggle{
+    font-family:var(--font);font-size:11px;font-weight:600;
+    letter-spacing:.12em;text-transform:uppercase;
+    padding:8px 15px;border:1px solid var(--ink);border-radius:999px;
+    background:var(--paper);color:var(--ink);cursor:pointer;
+    transition:background .15s,color .15s;
+  }
+  .toggle:hover{background:var(--faint);}
+  .toggle.active{background:var(--ink);color:var(--paper);}
+  .toggle:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+
+  #count{
+    margin-left:auto;font-size:11px;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--mid);font-weight:400;
+  }
+  #count b{color:var(--ink);font-weight:600;}
+
+  #next-line{
+    margin-top:11px;font-size:12px;letter-spacing:.02em;color:var(--mid);font-weight:300;
+  }
+  #next-line b{color:var(--ink);font-weight:600;letter-spacing:.03em;}
+  #next-line.hidden{display:none;}
+
+  /* ── Map ── */
+  #map{height:62vh;min-height:380px;width:100%;background:var(--paper);}
+  #loading{
+    display:flex;align-items:center;justify-content:center;
+    height:62vh;min-height:380px;background:var(--paper);
+    font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--mid);font-weight:600;
+  }
+  #notice{
+    display:none;padding:9px 18px;background:var(--faint);
+    border-bottom:1px solid var(--hair);
+    font-size:11px;letter-spacing:.04em;color:var(--mid);font-weight:400;
+  }
+
+  /* ── Pins (the heart logo) ── */
+  .tin-pin{position:relative;width:32px;height:32px;}
+  .tin-pin img{width:32px;height:32px;object-fit:contain;display:block;
+    filter:drop-shadow(0 1px 1px rgba(255,255,255,.9));}
+  .tin-pin.is-next::before{                          /* one pulse on the very next show */
+    content:'';position:absolute;left:50%;top:50%;width:32px;height:32px;
+    border:1.5px solid var(--ink);border-radius:50%;
+    transform:translate(-50%,-50%);
+    animation:tin-pulse 2.2s ease-out infinite;
+  }
+  @keyframes tin-pulse{
+    0%{opacity:.5;transform:translate(-50%,-50%) scale(.6);}
+    100%{opacity:0;transform:translate(-50%,-50%) scale(2.1);}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .tin-pin.is-next::before{animation:none;opacity:.35;transform:translate(-50%,-50%) scale(1.4);}
+  }
+
+  /* ── Popup ── */
+  .tin-popup .leaflet-popup-content-wrapper{
+    background:var(--paper);color:var(--ink);
+    border:1px solid var(--ink);border-radius:2px;
+    box-shadow:0 6px 22px rgba(0,0,0,.12);padding:0;
+  }
+  .tin-popup .leaflet-popup-tip{background:var(--paper);border:1px solid var(--ink);}
+  .tin-popup .leaflet-popup-content{margin:0;}
+  .tin-popup .leaflet-popup-close-button{color:var(--mid)!important;font-size:16px!important;top:7px;right:9px;}
+  .pop{padding:15px 17px 16px;min-width:180px;}
+  .pop .p-show{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--mid);font-weight:600;margin-bottom:7px;}
+  .pop .p-city{font-size:16px;font-weight:600;letter-spacing:.01em;margin-bottom:3px;}
+  .pop .p-date{font-size:12.5px;color:var(--mid);font-weight:400;letter-spacing:.02em;margin-bottom:13px;}
+  .pop .p-tix{
+    display:inline-block;font-family:var(--font);font-size:11px;font-weight:600;
+    letter-spacing:.11em;text-transform:uppercase;text-decoration:none;
+    padding:8px 16px;border:1px solid var(--ink);border-radius:999px;
+    color:var(--ink);background:var(--paper);transition:background .15s,color .15s;
+  }
+  .pop .p-tix:hover{background:var(--ink);color:var(--paper);}
+  .pop .p-soon{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mid);font-weight:400;}
+
+  .leaflet-container{font-family:var(--font);}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="bar">
+    <div class="eyebrow">Upcoming Shows</div>
+    <div id="row">
+      <button class="toggle active" data-region="all">All</button>
+      <button class="toggle" data-region="usa">USA</button>
+      <button class="toggle" data-region="intl">International</button>
+      <div id="count"></div>
+    </div>
+    <div id="next-line" class="hidden"></div>
+  </div>
+
+  <div id="notice"></div>
+  <div id="loading">Loading tour dates…</div>
+  <div id="map" style="display:none;"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ============================================================
+   CONFIG — point this at your Wix backend function.
+   Live:  https://YOUR-DOMAIN/_functions/shows
+   Test:  https://YOUR-DOMAIN/_functions-dev/shows   (before publish)
+   The backend function is in the companion file http-functions.js.
+   ============================================================ */
+const DATA_URL = "https://YOUR-DOMAIN/_functions/shows";
+
+const LOGO = "data:image/png;base64,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";
+
+/* Which country-field values count as USA. Everything else is International.
+   Edit to match exactly what's stored in your `country` field. */
+const US_COUNTRY = new Set(["united states","united states of america","usa","us","u.s.","u.s.a."]);
+
+/* Fallback: if `country` is blank, treat the show as US when `stateCountry`
+   looks like a US state (abbreviation or full name). */
+const US_STATES = new Set(("al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|"+
+  "ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy|dc|"+
+  "alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|"+
+  "illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|"+
+  "missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|"+
+  "ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|"+
+  "virginia|washington|west virginia|wisconsin|wyoming").split("|"));
+
+/* Sample data — shown only if DATA_URL can't be reached, so you can
+   preview the design. Delete once your endpoint is live. */
+const SAMPLE_SHOWS = [
+  {show:"Solo Acoustic",    city:"Austin",      stateCountry:"TX",             country:"United States",  longDate:"August 15, 2026",    date:"2026-08-15T00:00:00.000Z", latitude:30.2672, longitude:-97.7431,  ticketLink:"https://example.com"},
+  {show:"Full Band",        city:"Chicago",     stateCountry:"IL",             country:"United States",  longDate:"August 22, 2026",    date:"2026-08-22T00:00:00.000Z", latitude:41.8781, longitude:-87.6298,  ticketLink:"https://example.com"},
+  {show:"Full Band",        city:"Nashville",   stateCountry:"TN",             country:"United States",  longDate:"September 5, 2026",  date:"2026-09-05T00:00:00.000Z", latitude:36.1627, longitude:-86.7816,  ticketLink:"https://example.com"},
+  {show:"Acoustic Evening", city:"London",      stateCountry:"United Kingdom", country:"United Kingdom", longDate:"September 20, 2026", date:"2026-09-20T00:00:00.000Z", latitude:51.5074, longitude:-0.1278,   ticketLink:"https://example.com"},
+  {show:"Festival Set",     city:"Berlin",      stateCountry:"Germany",        country:"Germany",        longDate:"October 3, 2026",    date:"2026-10-03T00:00:00.000Z", latitude:52.5200, longitude:13.4050,   ticketLink:"https://example.com"},
+  {show:"Full Band",        city:"Los Angeles", stateCountry:"CA",             country:"United States",  longDate:"May 2, 2026",        date:"2026-05-02T00:00:00.000Z", latitude:34.0522, longitude:-118.2437, ticketLink:"https://example.com"}
+];
+
+/* ── Date helpers — prefer the real `date` field, fall back to text ── */
+const TODAY = new Date(); TODAY.setHours(0,0,0,0);
+function getDate(s){
+  if(s.date){ const d=new Date(s.date); if(!isNaN(d)) return d; }
+  if(s.longDate){ const d=new Date(s.longDate); if(!isNaN(d)) return d; }
+  return null;
+}
+function isUpcoming(s){ return s.dateObj && s.dateObj >= TODAY; }
+function byDate(a,b){ return (a.dateObj||8e15) - (b.dateObj||8e15); }
+
+/* ── Region helper ── */
+function isUS(s){
+  const c=(s.country||"").trim().toLowerCase();
+  if(c) return US_COUNTRY.has(c);
+  const sc=(s.stateCountry||"").trim().toLowerCase();
+  return US_STATES.has(sc);
+}
+
+/* ── Normalise whatever the endpoint returns into flat objects ── */
+function normalize(raw){
+  const rows = raw.items || raw.dataItems || [];
+  return rows.map(r => {
+    const f = r.data || r;                 // Velo items vs REST dataItems
+    const s = {
+      show:         f.show || "",
+      city:         f.city || "",
+      stateCountry: f.stateCountry || "",
+      country:      f.country || "",
+      longDate:     f.longDate || "",
+      date:         f.date || "",
+      ticketLink:   f.ticketLink || "",
+      lat:  parseFloat(f.latitude),
+      lng:  parseFloat(f.longitude)
+    };
+    s.dateObj = getDate(s);
+    return s;
+  }).filter(s => !isNaN(s.lat) && !isNaN(s.lng));
+}
+
+async function loadShows(){
+  try{
+    const res = await fetch(DATA_URL, {method:"GET"});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    return {shows: normalize(await res.json()), sample:false};
+  }catch(err){
+    console.warn("Falling back to sample data:", err.message);
+    return {shows: normalize({items:SAMPLE_SHOWS}), sample:true};
+  }
+}
+
+/* ── State: only upcoming shows ever exist here ── */
+let map, upcoming=[], markers=[], region="all";
+
+function currentList(){
+  if(region==="usa")  return upcoming.filter(isUS);
+  if(region==="intl") return upcoming.filter(s=>!isUS(s));
+  return upcoming;
+}
+
+function initMap(){
+  document.getElementById("loading").style.display="none";
+  document.getElementById("map").style.display="block";
+  map = L.map("map",{
+    zoomControl:true, scrollWheelZoom:false, attributionControl:true, worldCopyJump:true
+  }).setView([30,0],2);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{
+    attribution:'&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+    subdomains:"abcd", maxZoom:19
+  }).addTo(map);
+  map.zoomControl.setPosition("bottomright");
+}
+
+function makeIcon(isNext){
+  return L.divIcon({
+    className:"",
+    html:`<div class="tin-pin ${isNext?'is-next':''}"><img src="${LOGO}" alt=""></div>`,
+    iconSize:[32,32], iconAnchor:[16,16], popupAnchor:[0,-14]
+  });
+}
+
+function popupHtml(s){
+  const tix = s.ticketLink
+    ? `<a class="p-tix" href="${s.ticketLink}" target="_blank" rel="noopener">Tickets</a>`
+    : `<span class="p-soon">Tickets soon</span>`;
+  const place = [s.city, s.stateCountry].filter(Boolean).join(", ");
+  return `<div class="pop">
+      ${s.show?`<div class="p-show">${s.show}</div>`:""}
+      <div class="p-city">${place}</div>
+      <div class="p-date">${s.longDate||""}</div>
+      ${tix}
+    </div>`;
+}
+
+function render(list){
+  markers.forEach(m=>map.removeLayer(m)); markers=[];
+  const next = list[0];                 // list is already sorted by date
+  list.forEach(s=>{
+    const m = L.marker([s.lat,s.lng],{icon:makeIcon(s===next)}).addTo(map);
+    m.bindPopup(popupHtml(s),{className:"tin-popup",maxWidth:260,closeButton:true});
+    markers.push(m);
+  });
+  const n=list.length;
+  document.getElementById("count").innerHTML =
+    n ? `<b>${n}</b> ${n===1?"show":"shows"}` : "No upcoming shows";
+  const nl=document.getElementById("next-line");
+  if(next){
+    const place=[next.city,next.stateCountry].filter(Boolean).join(", ");
+    nl.innerHTML=`Next: <b>${place}</b> · ${next.longDate||""}`;
+    nl.classList.remove("hidden");
+  }else{ nl.classList.add("hidden"); }
+}
+
+/* ── Fit the viewport to the shows in view, padded to clear the bar ── */
+function fitTo(list){
+  if(list.length===0){ map.setView([30,0],2,{animate:true}); return; }
+  const barH = document.getElementById("bar").offsetHeight || 90;
+  const padTop = barH + 24;
+  if(list.length===1){ map.setView([list[0].lat,list[0].lng],6,{animate:true}); return; }
+  const bounds = L.latLngBounds(list.map(s=>[s.lat,s.lng]));
+  map.fitBounds(bounds,{
+    paddingTopLeft:[28,padTop], paddingBottomRight:[28,44],
+    maxZoom:8, animate:true, duration:0.9
+  });
+}
+
+function apply(){ const list=currentList(); render(list); fitTo(list); }
+
+/* ── Region filter ── */
+document.querySelectorAll(".toggle").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    document.querySelectorAll(".toggle").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    region=btn.dataset.region;
+    apply();
+  });
+});
+
+/* ── Keep the fit correct on resize / orientation change ── */
+let rt;
+window.addEventListener("resize",()=>{
+  clearTimeout(rt);
+  rt=setTimeout(()=>{ if(map){ map.invalidateSize(); apply(); } },200);
+});
+
+/* ── Boot ── */
+(async()=>{
+  const {shows,sample}=await loadShows();
+  upcoming = shows.filter(isUpcoming).sort(byDate);   // upcoming only, ever
+  initMap();
+  if(sample){
+    const nt=document.getElementById("notice");
+    nt.style.display="block";
+    nt.textContent="Preview mode — showing sample data. Set DATA_URL to your Wix endpoint to go live.";
+  }
+  apply();
+  setTimeout(()=>map.invalidateSize(),300);
+})();
+</script>
+</body>
+</html>
