@@ -162,15 +162,37 @@ const US_STATES = new Set(("al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|l
   "ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|"+
   "virginia|washington|west virginia|wisconsin|wyoming").split("|"));
 
-/* ── Date helpers — prefer the real `date` field, fall back to text ── */
-const TODAY = new Date(); TODAY.setHours(0,0,0,0);
-function getDate(s){
-  if(s.date){ const d=new Date(s.date); if(!isNaN(d)) return d; }
-  if(s.longDate){ const d=new Date(s.longDate); if(!isNaN(d)) return d; }
+/* ── Date helpers — TIMEZONE-SAFE ──
+   Bandsintown gives each show's time in the VENUE's own local time
+   (e.g. "2026-09-24T20:00:00"). We must NOT run that through new Date()
+   for display/among timezones, or an evening show can roll to the day
+   before. Instead we read the literal calendar date straight out of the
+   string and never convert zones — so the date shown is always the local
+   date where the show happens. */
+const MONTHS = ["January","February","March","April","May","June","July","August",
+                "September","October","November","December"];
+
+function ymd(str){                          // -> {y,mo,d} or null, no TZ math
+  if(!str) return null;
+  const m = String(str).match(/(\d{4})-(\d{2})-(\d{2})/);   // ISO date portion
+  if(m) return { y:+m[1], mo:+m[2], d:+m[3] };
+  const dt = new Date(str);                 // fallback for free text like "Sep 24, 2026"
+  if(!isNaN(dt)) return { y:dt.getFullYear(), mo:dt.getMonth()+1, d:dt.getDate() };
   return null;
 }
-function isUpcoming(s){ return s.dateObj && s.dateObj >= TODAY; }
-function byDate(a,b){ return (a.dateObj||8e15) - (b.dateObj||8e15); }
+function dateKey(s){                         // YYYYMMDD number for sort + upcoming test
+  const p = s.parts;
+  return p ? p.y*10000 + p.mo*100 + p.d : 99999999;
+}
+function fmtLocalDate(s){                     // "September 24, 2026" from literal parts
+  const p = s.parts;
+  return p ? MONTHS[p.mo-1] + " " + p.d + ", " + p.y : (s.longDate || "");
+}
+
+const _now = new Date();
+const TODAY_KEY = _now.getFullYear()*10000 + (_now.getMonth()+1)*100 + _now.getDate();
+function isUpcoming(s){ return s.parts && dateKey(s) >= TODAY_KEY; }
+function byDate(a,b){ return dateKey(a) - dateKey(b); }
 
 /* ── Region helper ── */
 function isUS(s){
@@ -196,7 +218,7 @@ function normalize(raw){
       lat:  parseFloat(f.latitude),
       lng:  parseFloat(f.longitude)
     };
-    s.dateObj = getDate(s);
+    s.parts = ymd(s.date || s.longDate);   // literal calendar date, TZ-safe
     return s;
   }).filter(s => !isNaN(s.lat) && !isNaN(s.lng));
 }
@@ -269,7 +291,7 @@ function popupHtml(s){
   return `<div class="pop">
       ${s.show?`<div class="p-show">${s.show}</div>`:""}
       <div class="p-city">${place}</div>
-      <div class="p-date">${s.longDate||""}</div>
+      <div class="p-date">${fmtLocalDate(s)}</div>
       ${tix}
     </div>`;
 }
@@ -291,7 +313,7 @@ function render(list){
   const nl=document.getElementById("next-line");
   if(next){
     const place=[next.city,next.stateCountry].filter(Boolean).join(", ");
-    nl.innerHTML=`Next: <b>${place}</b> · ${next.longDate||""}`;
+    nl.innerHTML=`Next: <b>${place}</b> · ${fmtLocalDate(next)}`;
     nl.classList.remove("hidden");
   }else{ nl.classList.add("hidden"); }
 }
