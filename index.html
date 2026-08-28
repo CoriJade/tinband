@@ -249,10 +249,28 @@ function initMap(){
   map = L.map("map",{
     zoomControl:true, scrollWheelZoom:false, attributionControl:true, worldCopyJump:true
   }).setView([30,0],2);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{
-    attribution:'&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
-    subdomains:"abcd", maxZoom:19
-  }).addTo(map);
+  /* ── Basemap ──
+     CARTO started requiring a free API key on its raster tiles (Aug 2026)
+     and watermarks unkeyed requests with "API KEY REQUIRED".
+     Fix: get a free key at https://carto.com/basemaps/apikey and paste it
+     below to keep this exact dark styling. Leave it blank to fall back to
+     Esri's dark canvas (no key needed, very similar clean dark look). */
+  const CARTO_KEY = "cb1_2hlg_1_51e851b08f935747cd0a487f";   // free CARTO basemaps key
+
+  if (CARTO_KEY) {
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=" + CARTO_KEY, {
+      attribution:'&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+      subdomains:"abcd", maxZoom:19
+    }).addTo(map);
+  } else {
+    // No-key fallback: Esri Dark Gray, free with attribution (base + labels).
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
+      attribution:'Tiles &copy; Esri', maxZoom:16
+    }).addTo(map);
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}", {
+      maxZoom:16
+    }).addTo(map);
+  }
   map.zoomControl.setPosition("bottomright");
 }
 
